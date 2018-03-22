@@ -1,0 +1,20 @@
+<?php
+$mod_strings = array(
+    'LBL_PROCESS' => 'Процесс',
+    'LBL_START_PROCESS' => 'Начать процесс',
+    'LBL_VARIABLES' => 'Информация',
+    'LBL_TASKS' => 'Задачи',
+    'LBL_TASK' => 'Задача',
+    'LBL_NEW_ASSIGNEE' => 'Новый ответственный',
+    'LBL_ASSIGNEE' => 'Ответственный',
+    'LBL_CREATED' => 'Дата создания',
+    'LBL_TASK_FORM' => 'Выполнение',
+    'LBL_COMPLETE_TASK' => 'Завершить задачу',
+    'LBL_SAVE_TASK' => 'Сохранить',
+    'LBL_ASSIGN' => 'Назначить',
+    'LBL_HISTORY' => 'История',
+    'LBL_DIAGRAM' => 'Диаграмма',
+    'LBL_DESCRIPTION' => 'Описание',
+    'LBL_START_TIME' => 'Процесс начат',
+    'LBL_END_TIME' => 'Процесс закончен',
+);

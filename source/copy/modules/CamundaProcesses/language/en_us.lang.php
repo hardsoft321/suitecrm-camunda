@@ -1,0 +1,21 @@
+<?php
+$mod_strings = array(
+    'LBL_PROCESS' => 'Process',
+    'LBL_START_PROCESS' => 'Start Process',
+    'LBL_VARIABLES' => 'Information',
+    'LBL_TASKS' => 'Tasks',
+    'LBL_TASK' => 'Task',
+    'LBL_NEW_ASSIGNEE' => 'New Assignee',
+    'LBL_ASSIGNEE' => 'Assignee',
+    'LBL_CREATED' => 'Created',
+    'LBL_CREATED' => 'Created',
+    'LBL_TASK_FORM' => 'Complete',
+    'LBL_COMPLETE_TASK' => 'Complete Task',
+    'LBL_SAVE_TASK' => 'Save',
+    'LBL_ASSIGN' => 'Assign',
+    'LBL_HISTORY' => 'History',
+    'LBL_DIAGRAM' => 'Diagram',
+    'LBL_DESCRIPTION' => 'Description',
+    'LBL_START_TIME' => 'Process Started',
+    'LBL_END_TIME' => 'Process Ended',
+);

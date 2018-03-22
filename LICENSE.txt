@@ -1,0 +1,16 @@
+This CRM321 module is part of SugarCRM Community Eddition (CE).
+
+CRM321 module for SugarCRM is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version. <http://www.gnu.org/licenses/>.
+
+
+
+
+
+since 2002 development of CRM321 is orchestrated by hardsoft321.org
+
+
+
+hardsoft321.org is providing commercial support and customised development of CRM321 and SugarCRM CE on time-and-material basis.
