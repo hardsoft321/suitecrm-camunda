@@ -8,7 +8,13 @@ $manifest = array(
     'is_uninstallable' => true,
     'published_date' => '2018-03-20',
     'type' => 'module',
-    'version' => '0.1.0',
+    'dependencies' => array(
+        array(
+            'id_name' => 'SugarBeanMailer',
+            'version' => '0'
+        ),
+    ),
+    'version' => '0.2.0',
 );
 $installdefs = array(
     'id' => 'camunda',

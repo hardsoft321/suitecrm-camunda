@@ -175,7 +175,7 @@ class CamundaProcessesController extends SugarController
             $camunda->post("/task/{$taskId}/submit-form", [
                 'variables' => $variables,
             ]);
-            //TODO: notify assigned_user when successful
+            SugarCamunda::notifyTaskCompleted($this->sugarBean, $task['name']);
         }
         else {
             //TODO: this request resets assignee
@@ -183,8 +183,6 @@ class CamundaProcessesController extends SugarController
                 'variables' => $variables,
             ]);
         }
-
-        //TODO: notify bean assigned user if successful
 
         $this->redirectToBean();
     }
@@ -200,6 +198,7 @@ class CamundaProcessesController extends SugarController
 
         $taskId = $_POST['task_id'];
         $newAssingedUserId = $_POST['assigned_user_id'];
+        $task = $camunda->get("/task/{$taskId}");
         $roles = SugarCamunda::getTaskCandidateRoles($taskId);
         $users = empty($roles)
             ? UserList::getAllGroupUsers($this->sugarBean)
@@ -214,17 +213,24 @@ class CamundaProcessesController extends SugarController
             sugar_die('Cannot assign this user');
         }
 
-        $user = BeanFactory::getBean('Users', $newAssingedUserId);
-        if (!$user) {
-            sugar_die('Cannot assign this user (user not found)');
+        $newAssignee = '';
+        if (!empty($newAssingedUserId)) {
+            $user = BeanFactory::getBean('Users', $newAssingedUserId);
+            if (!$user) {
+                sugar_die('Cannot assign this user (user not found)');
+            }
+            $newAssignee = $user->user_name;
         }
 
         $camunda->post("/task/{$taskId}/identity-links", [
-            'userId' => $user->user_name,
+            'userId' => $newAssignee,
             'type' => 'assignee',
         ]);
-
-        //TODO: notify new task assigned user if successful
+        if (!empty($newAssignee) && $user->id != $GLOBALS['current_user']->id
+            && $newAssignee != $task['assignee'])
+        {
+            SugarCamunda::notifyTaskAssignedUser($this->sugarBean, $user);
+        }
 
         $this->redirectToBean();
     }

@@ -323,4 +323,56 @@ class SugarCamunda
         $bpmn = $camunda->get("/process-definition/{$processDefinitionId}/xml");
         return $bpmn['bpmn20Xml'];
     }
+
+    public static function notifyTaskAssignedUser($bean, $user)
+    {
+        if (!file_exists('custom/include/SugarBeanMailer.php')) {
+            $GLOBALS['log']->fatal("SugarCamunda: SugarBeanMailer not found");
+            return;
+        }
+        require_once 'custom/include/SugarBeanMailer.php';
+        $current_language = !empty($_SESSION['authenticated_user_language'])
+            ? $_SESSION['authenticated_user_language'] : $sugar_config['default_language'];
+        $GLOBALS['mod_strings'] = return_module_language($current_language, $bean->module_name);
+        $mailer = new SugarBeanMailer($bean);
+        $mailer->set_notification_recipients(array($user));
+        $mailer->setTemplate('CamundaTaskAssign', array(
+            'ASSIGNED_USER' => $user->full_name,
+            'OBJECT' => translate('LBL_MODULE_NAME').': '.$bean->get_summary_text(),
+        ), self::getNotifyTemplateFile($current_language));
+        $mailer->sendNotifications();
+    }
+
+    public static function notifyTaskCompleted($bean, $taskName)
+    {
+        if (!file_exists('custom/include/SugarBeanMailer.php')) {
+            $GLOBALS['log']->fatal("SugarCamunda: SugarBeanMailer not found");
+            return;
+        }
+        require_once 'custom/include/SugarBeanMailer.php';
+        if (empty($bean->assigned_user_id)) {
+            return;
+        }
+        $current_language = !empty($_SESSION['authenticated_user_language'])
+            ? $_SESSION['authenticated_user_language'] : $sugar_config['default_language'];
+        $GLOBALS['mod_strings'] = return_module_language($current_language, $bean->module_name);
+        $user = BeanFactory::getBean('Users', $bean->assigned_user_id);
+        $mailer = new SugarBeanMailer($bean);
+        $mailer->set_notification_recipients(array($user));
+        $mailer->setTemplate('CamundaTaskCompleted', array(
+            'ASSIGNED_USER' => $user->full_name,
+            'OBJECT' => translate('LBL_MODULE_NAME').': '.$bean->get_summary_text(),
+            'TASK_NAME' => $taskName,
+        ), self::getNotifyTemplateFile($current_language));
+        $mailer->sendNotifications();
+    }
+
+    public static function getNotifyTemplateFile($language)
+    {
+        $file = "custom/include/language/en_us.camunda.html";
+        if (file_exists("custom/include/language/{$language}.camunda.html")) {
+            $file = "custom/include/language/{$language}.camunda.html";
+        }
+        return $file;
+    }
 }
