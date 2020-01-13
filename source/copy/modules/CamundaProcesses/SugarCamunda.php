@@ -4,7 +4,8 @@
  * @author Evgeny Pervushin <pea@lab321.ru>
  */
 
-require_once 'modules/CamundaProcesses/UserList.php';
+require_once 'modules/CamundaProcesses/CamundaProcess.php';
+require_once 'custom/include/Pest/PestJSON.php';
 
 class SugarCamunda
 {
@@ -14,369 +15,169 @@ class SugarCamunda
 
     public static function getUrl()
     {
-        return $GLOBALS['sugar_config']['camunda_url'];
+        return $GLOBALS['sugar_config']['camunda']['url'];
     }
 
     public static function getEngineUrl()
     {
-        return $GLOBALS['sugar_config']['camunda_engine_url'];
+        return $GLOBALS['sugar_config']['camunda']['engine_url'];
     }
 
     public static function getJsonClient()
     {
         if (!self::$jsonClient) {
             self::$jsonClient = new PestJSON(self::getEngineUrl());
+            if (!empty($GLOBALS['sugar_config']['camunda']['camunda_user'])) {
+                self::$jsonClient->setupAuth($GLOBALS['sugar_config']['camunda']['camunda_user']['login']
+                    , $GLOBALS['sugar_config']['camunda']['camunda_user']['password']);
+            }
         }
         return self::$jsonClient;
-    }
-
-    public static function getXmlClient()
-    {
-        if (!self::$xmlClient) {
-            self::$xmlClient = new PestXML(self::getEngineUrl());
-        }
-        return self::$xmlClient;
     }
 
     public static function getClient()
     {
         if (!self::$client) {
             self::$client = new Pest(self::getEngineUrl());
+            if (!empty($GLOBALS['sugar_config']['camunda']['camunda_user'])) {
+                self::$client->setupAuth($GLOBALS['sugar_config']['camunda']['camunda_user']['login']
+                    , $GLOBALS['sugar_config']['camunda']['camunda_user']['password']);
+            }
         }
         return self::$client;
     }
 
-    public static function loadProcessDefinitions($bean, $bpmnList = null)
+    public static function getCamundaProcess($processDefinition, $bean, $fieldName)
     {
-        $camunda = SugarCamunda::getJsonClient();
-        $camundaRaw = SugarCamunda::getClient();
-
-        $processDefinitions = $camunda->get('/process-definition', [
-            'active' => true,
-            'latestVersion' => true,
-        ]);
-
-        if ($bpmnList !== null) {
-            foreach ($processDefinitions as $k => $processDefinition) {
-                if (!in_array($processDefinition['key'], $bpmnList)) {
-                    unset($processDefinitions[$k]);
-                }
+        if (empty($processDefinition['key']) && !empty($processDefinition['id'])) {
+            if (preg_match('/(?P<key>[^:]+):(?P<version>\d+):(?P<uuid>.+)/', $processDefinition['id'], $matches)) {
+                $processDefinition['key'] = $matches['key'];
             }
         }
+        if (!empty($processDefinition['key'])) {
+            $defKey = $processDefinition['key'];
+            $processMap = !empty($bean->field_defs[$fieldName]['processes']) ? $bean->field_defs[$fieldName]['processes'] : null;
+            if ($processMap === null || (isset($processMap[$defKey]) && $processMap[$defKey] === 'CamundaProcess')) {
+                return new CamundaProcess($processDefinition, $bean, $fieldName);
+            }
+            if (!empty($processMap) && isset($processMap[$defKey]) && is_array($processMap[$defKey])) {
+                require_once ($processMap[$defKey]['include']);
+                return new $processMap[$defKey]['class']($processDefinition, $bean, $fieldName);
+            }
+        }
+        return null;
+    }
 
-        foreach ($processDefinitions as &$processDefinition) {
-            $processDefinition['form'] = $camunda->get("process-definition/{$processDefinition['id']}/startForm");
-            if ($processDefinition['form']) {
-                if (strpos($processDefinition['form']['key'], "embedded:app:") === 0) {
-                    $url = SugarCamunda::getUrl()
-                        . str_replace("embedded:app:", $processDefinition['form']['contextPath'] . '/', $processDefinition['form']['key'])
-                        . "?userId={$GLOBALS['current_user']->user_name}&noCache=".rand();
-                    $processDefinition['form']['html'] = file_get_contents($url);
-                }
-                else {
-                    try {
-                        $processDefinition['form']['html'] = $camundaRaw->get("/process-definition/{$processDefinition['id']}/rendered-form");
-                    }
-                    catch (Exception $ex) {
-                    }
-                }
+    public static function clean_string($str, $filter = "STANDARD", $dieOnBadData = true)
+    {
+        $filters = array(
+            "STANDARD" => '#[^A-Z0-9\-_\.:]#i',
+        );
+        if (preg_match($filters[$filter], $str)) {
+            if (isset($GLOBALS['log']) && is_object($GLOBALS['log'])) {
+                $GLOBALS['log']->fatal("SECURITY[$filter]: bad data passed in; string: {$str}");
+            }
+            if ( $dieOnBadData ) {
+                echo "Bad data passed in; <a href=\"index.php\">Return to Home</a>";
+                sugar_die('');
+            }
+            return false;
+        }
+        else {
+            return $str;
+        }
+    }
+
+    public static function loadProcessDefinitions($bean, $fieldName)
+    {
+        $processDefinitions = SugarCamunda::getJsonClient()->get('/process-definition', array(
+            'active' => true,
+            'latestVersion' => true,
+            'sortBy' => 'key',
+            'sortOrder' => 'desc',
+        ));
+        foreach ($processDefinitions as $k => &$processDefinition) {
+            $process = self::getCamundaProcess($processDefinition, $bean, $fieldName);
+            if ($process) {
+                $process->loadProcessDefinition($processDefinition);
+            }
+            else {
+                unset($processDefinitions[$k]);
             }
         }
         unset($processDefinition);
-
         return $processDefinitions;
     }
 
-    public static function loadProcessInstances($bean, $bpmnList)
+    public static function loadProcessInstances($bean, $fieldName)
     {
-        $camunda = SugarCamunda::getJsonClient();
-        $camundaRaw = SugarCamunda::getClient();
-
-        $processInstances = $camunda->get('/process-instance', [
+        $processInstances = SugarCamunda::getJsonClient()->get('/process-instance', array(
             'businessKey' => $bean->id,
-            //TODO: filter by processDefinitionId also
-        ]);
-
-        foreach ($processInstances as &$processInstance) {
-            $processInstance['processDefinition'] = $camunda->get("/process-definition/{$processInstance['definitionId']}");
-
-            $processInstance['variables'] = $camunda->get("/process-instance/{$processInstance['id']}/variables");
-            self::translateVariables($processInstance['variables'], $processInstance['processDefinition']['id']);
-
-            $processInstance['tasks'] = $camunda->get('task', [
-                'processInstanceId' => $processInstance['id'],
-            ]);
-            foreach ($processInstance['tasks'] as &$task) {
-
-                if (!empty($task['assignee'])) {
-                    $user = $GLOBALS['db']->fetchOne("SELECT id, first_name, last_name FROM users WHERE user_name = "
-                        .$GLOBALS['db']->quoted($task['assignee'])." AND deleted = 0");
-                    if (!empty($user)) {
-                        $full_name = $GLOBALS['locale']->getLocaleFormattedName($user['first_name'], $user['last_name']);
-                        $task['assignee_id'] = $user['id'];
-                        $task['assignee_full_name'] = $full_name;
-                    }
+            'sortBy' => 'instanceId',
+            'sortOrder' => 'asc',
+        ));
+        foreach ($processInstances as $k => &$processInstance) {
+            $processInstance['processDefinition'] = SugarCamunda::getJsonClient()->get("/process-definition/{$processInstance['definitionId']}");
+            $process = self::getCamundaProcess($processInstance['processDefinition'], $bean, $fieldName);
+            if ($process) {
+                $process->loadProcessInstance($processInstance);
+                if ($processInstance == null) {
+                    unset($processInstances[$k]);
                 }
-                if (!empty($task['created'])) {
-                    $task['created_inuserformat'] = self::dateTimeToUserFormat($task['created']);
-                }
-
-                if ($task['formKey']) {
-                    $task['form'] = $camunda->get("/task/{$task['id']}/form");
-                    if (strpos($task['form']['key'], "embedded:app:") === 0) {
-                        $url = SugarCamunda::getUrl()
-                            . str_replace("embedded:app:", $task['form']['contextPath'] . '/', $task['form']['key'])
-                            . "?taskId={$task['id']}&userId={$GLOBALS['current_user']->user_name}&noCache=".rand();
-                        $task['form']['html'] = file_get_contents($url);
-                    }
-                }
-                else {
-                    try {
-                        $task['form']['html'] = $camundaRaw->get("/task/{$task['id']}/rendered-form");
-                    }
-                    catch (Exception $ex) {
-                    }
-                }
-                //TODO: make datepicker works
-                $task['form']['variables'] = $camunda->get("/task/{$task['id']}/form-variables");
-
-                $roles = self::getTaskCandidateRoles($task['id']);
-                $users = empty($roles)
-                    ? UserList::getAllGroupUsers($bean)
-                    : UserList::getGroupUsersWithRoles($bean, $roles);
-                $usersOptions = ['' => ''];
-                foreach ($users as $user) {
-                    $full_name = $GLOBALS['locale']->getLocaleFormattedName($user->first_name, $user->last_name);
-                    $usersOptions[$user->id] = $full_name;
-                }
-                $task['identity']['all_group_users'] = $usersOptions;
-
-                $task['canSave'] = self::canSaveTask(!empty($task['assignee_id']) ? $task['assignee_id'] : null);
-                $task['canAssign'] = self::canAssignTask($bean, $users);
-
-                $task['history'] = $camunda->get('/history/user-operation', [
-                    'taskId' => $task['id'],
-                ]);
-                /* TODO: Нет истории смены ответственного. Так как нет нужных пользователей в камунде или нет логина? */
             }
-            unset($task);
-
-            $processInstance['history'] = self::getHistoryActivityInstances($processInstance['id']);
+            else {
+                unset($processInstances[$k]);
+            }
         }
         unset($processInstance);
-
         return $processInstances;
     }
 
-    //TODO: refactor to OOP CamundaProcess, CamundaTask
-
-    public static function canSaveTask($assigneeId)
+    public static function loadHistoryProcessInstances($bean, $fieldName)
     {
-        return $GLOBALS['current_user']->isAdmin()
-            || $assigneeId === $GLOBALS['current_user']->id;
-    }
-
-    public static function canAssignTask($bean, $roleUsers)
-    {
-        return $GLOBALS['current_user']->isAdmin()
-            || $bean->isOwner($GLOBALS['current_user']->id)
-            || isset($roleUsers[$GLOBALS['current_user']->id]);
-    }
-
-    public static function getTaskCandidateRoles($taskId)
-    {
-        global $db;
-        $camunda = SugarCamunda::getJsonClient();
-        $identityLinks = $camunda->get("/task/{$taskId}/identity-links", [
-            'type' => 'candidate',
-        ]);
-        $roles = [];
-        foreach ($identityLinks as $identity) {
-            if (empty($identity['groupId'])) {
-                continue;
-            }
-            $names = explode(',', $identity['groupId']);
-            foreach ($names as $name) {
-                $roleId = $db->getOne("SELECT id FROM acl_roles WHERE name = "
-                    .$db->quoted(trim($name))." AND deleted = 0");
-                $roles[] = $roleId;
-            }
-        }
-        return $roles;
-    }
-
-    public static function loadHistoryProcessInstances($bean, $bpmnList = null)
-    {
-        $camunda = SugarCamunda::getJsonClient();
-
-        $historyProcessInstances = $camunda->get('/history/process-instance', [
+        $historyProcessInstances = SugarCamunda::getJsonClient()->get('/history/process-instance', array(
             'processInstanceBusinessKey' => $bean->id,
             'finished' => true,
-        ]);
+            'sortBy' => 'endTime',
+            'sortOrder' => 'desc',
+        ));
 
-        foreach ($historyProcessInstances as &$processInstance) {
-            $processInstance['startTime_inuserformat'] = self::dateTimeToUserFormat($processInstance['startTime']);
-            $processInstance['endTime_inuserformat'] = self::dateTimeToUserFormat($processInstance['endTime']);
-            $processInstance['processDefinition'] = $camunda->get("/process-definition/{$processInstance['processDefinitionId']}");
-            $processInstance['variables'] = $camunda->get("/history/variable-instance", [
-                'processInstanceId' => $processInstance['id'],
-            ]);
-            self::translateVariables($processInstance['variables'], $processInstance['processDefinitionId']);
-            $processInstance['history'] = self::getHistoryActivityInstances($processInstance['id']);
+        foreach ($historyProcessInstances as $k => &$processInstance) {
+            $processInstance['processDefinition'] = SugarCamunda::getJsonClient()->get("/process-definition/{$processInstance['processDefinitionId']}");
+            $process = self::getCamundaProcess($processInstance['processDefinition'], $bean, $fieldName);
+            if ($process) {
+                $process->loadHistoryProcessInstance($processInstance);
+            }
+            else {
+                unset($historyProcessInstances[$k]);
+            }
         }
         unset($processInstance);
 
         return $historyProcessInstances;
     }
 
-    public static function getHistoryActivityInstances($processInstanceId)
+    public static function getSugarProcesses()
     {
-        $camunda = SugarCamunda::getJsonClient();
-        $history = $camunda->get("/history/activity-instance", [
-            'processInstanceId' => $processInstanceId,
-            'sortBy' => 'occurrence',
-            'sortOrder' => 'asc',
-        ]);
-        foreach ($history as $key => &$activity) {
-            if (empty($activity['activityName'])) {
-                unset($history[$key]);
-                continue;
-            }
-            if (!empty($activity['startTime'])) {
-                $activity['startTime_inuserformat'] = self::dateTimeToUserFormat($activity['startTime']);
-            }
-            if (!empty($activity['endTime'])) {
-                $activity['endTime_inuserformat'] = self::dateTimeToUserFormat($activity['endTime']);
-            }
-        }
-        unset($activity);
-        return $history;
-    }
-
-    public static function dateTimeToUserFormat($datetime)
-    {
-        $time = strtotime($datetime);
-        return $GLOBALS['timedate']->to_display_date_time(
-            date('Y-m-d H:i:s', $time), true, true, $GLOBALS['current_user']);
-    }
-
-    public static function translateVariables(&$variables, $processDefinitionId)
-    {
-        foreach ($variables as $key => &$variable) {
-            $varName = !empty($variable['name']) ? $variable['name'] : $key;
-            if ($varName == '_dummy') { // see action_CompleteTask
-                unset($variables[$key]);
-            }
-            $variable['field'] = $varName;
-            $variable['label'] = self::getFormFieldLabel($varName, $processDefinitionId);
-            $variable['value_inuserformat'] = $variable['value'];
-            if (!empty($variable['value'])) {
-                if ($variable['type'] == 'Date') {
-                    $variable['value_inuserformat'] = self::dateTimeToUserFormat($variable['value']);
-                }
-                else {
-                    $variable['value_inuserformat'] = self::getFormFieldLabel($varName, $processDefinitionId, $variable['value']);
-                }
-            }
-        }
-        unset($variable);
-    }
-
-    public static function getFormFieldLabel($formField, $processDefinitionId, $selectedValue = null)
-    {
-        static $bpmnStrings;
-        static $bpmnListStrings;
-        if (!isset($bpmnStrings[$processDefinitionId])) {
-            //TODO: store to cache dir too
-            $bpmnStrings[$processDefinitionId] = [];
-            $bpmnListStrings[$processDefinitionId] = [];
-            $text = self::getBpmnXml($processDefinitionId);
-            $xml = simplexml_load_string($text);
-            if (!empty($xml)) {
-                $fields = $xml->xpath('.//camunda:formField[@id and @label]');
-                foreach ($fields as $field) {
-                    $bpmnStrings[$processDefinitionId][(string)$field['id']] = (string)$field['label'];
-                    if ($field['type'] == 'enum') {
-                        $values = $field->xpath('./camunda:value[@id and @name]');
-                        foreach ($values as $value) {
-                            $bpmnListStrings[$processDefinitionId] [(string)$field['id']]
-                                [(string)$value['id']] = (string)$value['name'];
+        $sugarProcs = array();
+        foreach ($GLOBALS['moduleList'] as $module) {
+            $bean = BeanFactory::newBean($module);
+            if ($bean && !empty($bean->field_defs)) {
+                foreach ($bean->field_defs as $fieldDef) {
+                    if (!empty($fieldDef['type']) && $fieldDef['type'] === 'CamundaProcess') {
+                        foreach ($fieldDef['processes'] as $defKey => $proc) {
+                            if (empty($sugarProcs[$defKey])) {
+                                $sugarProcs[$defKey] = array(
+                                    'processDefinitionKey' => $defKey,
+                                    'module' => $module,
+                                    'fieldName' => $fieldDef['name'],
+                                );
+                            }
                         }
                     }
                 }
             }
         }
-        if ($selectedValue !== null) {
-            return isset($bpmnListStrings[$processDefinitionId][$formField][$selectedValue])
-                ? $bpmnListStrings[$processDefinitionId][$formField][$selectedValue]
-                : $selectedValue;
-        }
-        return $bpmnStrings[$processDefinitionId][$formField];
-    }
-
-    public static function getBpmnXmlByTaskId($taskId)
-    {
-        $camunda = SugarCamunda::getJsonClient();
-        $task = $camunda->get("/task/{$taskId}");
-        return self::getBpmnXml($task['processDefinitionId']);
-    }
-
-    public static function getBpmnXml($processDefinitionId)
-    {
-        $camunda = SugarCamunda::getJsonClient();
-        $bpmn = $camunda->get("/process-definition/{$processDefinitionId}/xml");
-        return $bpmn['bpmn20Xml'];
-    }
-
-    public static function notifyTaskAssignedUser($bean, $user)
-    {
-        if (!file_exists('custom/include/SugarBeanMailer.php')) {
-            $GLOBALS['log']->fatal("SugarCamunda: SugarBeanMailer not found");
-            return;
-        }
-        require_once 'custom/include/SugarBeanMailer.php';
-        $current_language = !empty($_SESSION['authenticated_user_language'])
-            ? $_SESSION['authenticated_user_language'] : $sugar_config['default_language'];
-        $GLOBALS['mod_strings'] = return_module_language($current_language, $bean->module_name);
-        $mailer = new SugarBeanMailer($bean);
-        $mailer->set_notification_recipients(array($user));
-        $mailer->setTemplate('CamundaTaskAssign', array(
-            'ASSIGNED_USER' => $user->full_name,
-            'OBJECT' => translate('LBL_MODULE_NAME').': '.$bean->get_summary_text(),
-        ), self::getNotifyTemplateFile($current_language));
-        $mailer->sendNotifications();
-    }
-
-    public static function notifyTaskCompleted($bean, $taskName)
-    {
-        if (!file_exists('custom/include/SugarBeanMailer.php')) {
-            $GLOBALS['log']->fatal("SugarCamunda: SugarBeanMailer not found");
-            return;
-        }
-        require_once 'custom/include/SugarBeanMailer.php';
-        if (empty($bean->assigned_user_id)) {
-            return;
-        }
-        $current_language = !empty($_SESSION['authenticated_user_language'])
-            ? $_SESSION['authenticated_user_language'] : $sugar_config['default_language'];
-        $GLOBALS['mod_strings'] = return_module_language($current_language, $bean->module_name);
-        $user = BeanFactory::getBean('Users', $bean->assigned_user_id);
-        $mailer = new SugarBeanMailer($bean);
-        $mailer->set_notification_recipients(array($user));
-        $mailer->setTemplate('CamundaTaskCompleted', array(
-            'ASSIGNED_USER' => $user->full_name,
-            'OBJECT' => translate('LBL_MODULE_NAME').': '.$bean->get_summary_text(),
-            'TASK_NAME' => $taskName,
-        ), self::getNotifyTemplateFile($current_language));
-        $mailer->sendNotifications();
-    }
-
-    public static function getNotifyTemplateFile($language)
-    {
-        $file = "custom/include/language/en_us.camunda.html";
-        if (file_exists("custom/include/language/{$language}.camunda.html")) {
-            $file = "custom/include/language/{$language}.camunda.html";
-        }
-        return $file;
+        return $sugarProcs;
     }
 }

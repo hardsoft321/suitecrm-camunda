@@ -5,22 +5,20 @@
  */
 
 require_once 'modules/CamundaProcesses/SugarCamunda.php';
+require_once 'modules/CamundaProcesses/CamundaProcessDefinition.php';
 
 class CamundaProcessesController extends SugarController
 {
+    protected $sugarBean;
+    protected $camundaFieldName;
+
     public function loadBean()
     {
         parent::loadBean();
         $this->sugarBean = null;
-        $this->bpmnList = null;
         if (!empty($_REQUEST['sugar_module']) && !empty($_REQUEST['sugar_record'])) {
             $this->sugarBean = BeanFactory::getBean($_REQUEST['sugar_module'], $_REQUEST['sugar_record']);
-            if (!empty($this->sugarBean) && !empty($_REQUEST['field'])) {
-                if (isset($this->sugarBean->field_defs[$_REQUEST['field']]['bpmn'])) {
-                    $bpnm = $this->sugarBean->field_defs[$_REQUEST['field']]['bpmn'];
-                    $this->bpmnList = is_array($bpnm) ? $bpnm : array($bpnm);
-                }
-            }
+            $this->camundaFieldName = $_REQUEST['camunda_field_name'];
         }
     }
 
@@ -28,22 +26,42 @@ class CamundaProcessesController extends SugarController
     {
         $this->view = '';
         if (empty($this->sugarBean)) {
-            $GLOBALS['log']->error("CamundaProcessesController action_Panel: sugar bean not loaded");
+            echo translate('ERROR_NO_RECORD');
             return;
         }
         $ss = new Sugar_Smarty();
         $ss->assign('bean', $this->sugarBean);
-        $processInstances = SugarCamunda::loadProcessInstances($this->sugarBean, $this->bpmnList);
-        $historyProcessInstances = SugarCamunda::loadHistoryProcessInstances($this->sugarBean, $this->bpmnList);
+        $ss->assign('camunda_field_name', $this->camundaFieldName);
+        $ss->assign('current_user_is_admin', $GLOBALS['current_user']->isAdmin());
+        $show_process_instances = !isset($this->sugarBean->field_defs[$this->camundaFieldName]['show_process_instances'])
+                || $this->sugarBean->field_defs[$this->camundaFieldName]['show_process_instances'];
+        $show_historic_processes = !isset($this->sugarBean->field_defs[$this->camundaFieldName]['show_historic_processes'])
+                || $this->sugarBean->field_defs[$this->camundaFieldName]['show_historic_processes'];
+        $processInstances = $show_process_instances ?
+            SugarCamunda::loadProcessInstances($this->sugarBean, $this->camundaFieldName) : array();
+        $historyProcessInstances = $show_historic_processes ?
+                SugarCamunda::loadHistoryProcessInstances($this->sugarBean, $this->camundaFieldName) : array();
         header('Content-Type: text/html');
-        if (empty($processInstances) && empty($historyProcessInstances)) {
-            $processDefinitions = SugarCamunda::loadProcessDefinitions($this->sugarBean, $this->bpmnList);
+        if (!empty($GLOBALS['camunda_urgent_task_requires_page_reload'])) {
+            if (!empty($GLOBALS['camunda_urgent_task_requires_page_reload']['url'])) {
+                echo translate('LBL_LOADING')
+                     . '<script>location = ' . json_encode($GLOBALS['camunda_urgent_task_requires_page_reload']['url']) . ';</script>';
+                return;
+            }
+            echo translate('LBL_LOADING') . '<script>location.reload();</script>'; //TODO: it can be faster with SUGAR.ajaxUI
+            return;
+        }
+        if (empty($processInstances) && $show_process_instances) {
+            $processDefinitions = SugarCamunda::loadProcessDefinitions($this->sugarBean, $this->camundaFieldName);
             $ss->assign('processDefinitions', $processDefinitions);
             echo $ss->fetch('modules/CamundaProcesses/tpls/ProcessDefinitions.tpl');
         }
-        else {
+        if (!empty($processInstances) || !empty($historyProcessInstances)) {
             $ss->assign('processInstances', array_merge($processInstances, $historyProcessInstances));
             echo $ss->fetch('modules/CamundaProcesses/tpls/ProcessInstances.tpl');
+        }
+        if (empty($processDefinitions) && empty($processInstances) && empty($historyProcessInstances)) {
+            echo translate('LBL_NO_DATA');
         }
     }
 
@@ -51,59 +69,58 @@ class CamundaProcessesController extends SugarController
     {
         $this->view = '';
         if (empty($this->sugarBean) || !$this->sugarBean->ACLAccess('view')) {
-            http_response_code(404);
             echo translate('ERROR_NO_RECORD');
             return;
         }
-        echo SugarCamunda::getBpmnXmlByTaskId($_REQUEST['task_id']);
+        header('Content-Type: application/xml; charset=utf-8');
+        $processDefinitionId = SugarCamunda::clean_string($_REQUEST['definition_id']);
+        echo CamundaProcessDefinition::getBpmnXml($processDefinitionId);
     }
 
-    public function action_Start()
+    public function action_StartProcess()
     {
         $this->view = '';
         if (empty($this->sugarBean)) {
-            $GLOBALS['log']->error("CamundaProcessesController action_Start: sugar bean not loaded");
+            echo translate('ERROR_NO_RECORD');
             return;
         }
-        $camunda = SugarCamunda::getJsonClient();
-
-        $form = $camunda->get("/process-definition/{$_POST['definition_id']}/startForm");
-        $variables = [];
-        //TODO: code duplication in work with form, see action_SaveTask, SugarCamunda loadProcessDefinitions and loadProcessInstances
-        if (strpos($form['key'], "embedded:app:") === 0) {
-            $url = SugarCamunda::getUrl()
-                . str_replace("embedded:app:", $form['contextPath'] . '/', $form['key'])
-                ."?userId={$GLOBALS['current_user']->user_name}&noCache=".rand();
-            $html = file_get_contents($url);
-            $xml = simplexml_load_string($html);
-            if (!empty($xml)) {
-                $inputs = $xml->xpath('.//input[@cam-variable-type and @cam-variable-name and @name]');
-                foreach ($inputs as $input) {
-                    $variables[(string) $input['cam-variable-name']] = [
-                        'value' => $_POST[(string) $input['name']],
-                        'type' => (string) $input['cam-variable-type'],
-                    ];
-                }
-            }
+        if (empty($_POST['definition_id'])) {
+            echo "definition_id is empty";
+            return;
         }
-        else {
-            $definitionVariables = $camunda->get("/process-definition/{$_POST['definition_id']}/form-variables");
-            foreach ($definitionVariables as $name => $var) {
-                $variables[$name] = [
-                    'value' => $_POST[$name],
-                    'type' => $var['type'],
-                ];
-            }
+        $processDefinitionId = SugarCamunda::clean_string($_POST['definition_id']);
+        $process = SugarCamunda::getCamundaProcess(array('id' => $processDefinitionId), $this->sugarBean, $this->camundaFieldName);
+        if (!$process) {
+            echo "Unable to start process";
+            return;
         }
-
-        $process = $camunda->post("/process-definition/{$_POST['definition_id']}/submit-form", [
-            'businessKey' => $_POST['sugar_record'],
-            'variables' => $variables,
-        ]);
-        if (empty($process) || empty($process->id)) {
-            $GLOBALS['log']->error("CamundaProcessesController: unable to start process instance for definition {$_POST['definition_id']}. Response: ".var_export($process, true));
+        if (!$process->startAccess()) {
+            echo "No access";
+            return;
         }
+        $variables = $process->getStartFormVariables();
+        $process->fillStartVariables($_POST, $variables);
+        $result = $process->start($variables);
+        if (empty($result) || empty($result['id'])) {
+            $GLOBALS['log']->error("CamundaProcessesController: unable to start process instance for definition {$processDefinitionId}."
+                . " Response: ".var_export($result, true));
+        }
+        $this->redirectToBean();
+    }
 
+    public function action_DeleteProcess()
+    {
+        $this->view = '';
+        if (!$GLOBALS['current_user']->isAdmin()) {
+            echo 'Only admin access';
+            return;
+        }
+        if (empty($_POST['process_id'])) {
+            echo 'process_id is empty';
+            return;
+        }
+        $processId = SugarCamunda::clean_string($_POST['process_id']);
+        SugarCamunda::getJsonClient()->delete("/process-instance/{$processId}");
         $this->redirectToBean();
     }
 
@@ -111,79 +128,30 @@ class CamundaProcessesController extends SugarController
     {
         $this->view = '';
         if (empty($this->sugarBean)) {
-            $GLOBALS['log']->error("CamundaProcessesController action_SaveTask: sugar bean not loaded");
+            echo translate('ERROR_NO_RECORD');
             return;
         }
-        $camunda = SugarCamunda::getJsonClient();
-        $camundaRaw = SugarCamunda::getClient();
-
-        $taskId = $_POST['task_id'];
-        $task = $camunda->get("/task/{$taskId}");
-        $assigneeId = null;
-        if (!empty($task['assignee'])) {
-            $user = $GLOBALS['db']->fetchOne("SELECT id FROM users WHERE user_name = "
-                .$GLOBALS['db']->quoted($task['assignee'])." AND deleted = 0");
-            if (!empty($user)) {
-                $assigneeId = $user['id'];
-            }
+        if (empty($_POST['task_id'])) {
+            echo "CamundaProcessesController action_SaveTask: task_id is empty";
+            return;
         }
-        $canSave = SugarCamunda::canSaveTask($assigneeId);
+        $taskId = SugarCamunda::clean_string($_POST['task_id']);
+        $task = SugarCamunda::getJsonClient()->get("/task/{$taskId}");
+        $process = SugarCamunda::getCamundaProcess(array('id' => $task['processDefinitionId']), $this->sugarBean, $this->camundaFieldName);
+        if (!$process) {
+            echo 'No process';
+            return;
+        }
+        $camundaTask = $process->getCamundaTask($task);
+        $canSave = $camundaTask->saveAccess();
         if (!$canSave) {
-            sugar_die('Access denied');
+            echo 'Access denied';
+            return;
         }
-
-        $form = $camunda->get("/task/{$taskId}/form");
-        $variables = [];
-        $html = '';
-        if (strpos($form['key'], "embedded:app:") === 0) {
-            $url = SugarCamunda::getUrl()
-                . str_replace("embedded:app:", $form['contextPath'] . '/', $form['key'])
-                ."?userId={$GLOBALS['current_user']->user_name}&noCache=".rand();
-            $html = file_get_contents($url);
-        }
-        else {
-            try {
-                $html = $camundaRaw->get("/task/{$taskId}/rendered-form");
-            }
-            catch (Exception $ex) {
-            }
-        }
-        if ($html) {
-            $doc = new DOMDocument();
-            $doc->strictErrorChecking = false;
-            $doc->loadHTML($html);
-            $xml = simplexml_import_dom($doc);
-            if (!empty($xml)) {
-                $inputs = $xml->xpath('.//*[@cam-variable-type and @cam-variable-name and @name]');
-                foreach ($inputs as $input) {
-                    $variables[(string) $input['cam-variable-name']] = [
-                        'value' => $_POST[(string) $input['name']],
-                        'type' => (string) $input['cam-variable-type'],
-                    ];
-                }
-            }
-        }
-
-        if (empty($variables)) { //TODO: send no variables
-            $variables['_dummy'] = [
-                'value' => "",
-                'type' => "string",
-            ];
-        }
-
-        if (!empty($_POST['complete'])) {
-            $camunda->post("/task/{$taskId}/submit-form", [
-                'variables' => $variables,
-            ]);
-            SugarCamunda::notifyTaskCompleted($this->sugarBean, $task['name']);
-        }
-        else {
-            //TODO: this request resets assignee
-            $camunda->post("/task/{$taskId}/resolve", [
-                'variables' => $variables,
-            ]);
-        }
-
+        $variables = $camundaTask->getFormVariables();
+        $camundaTask->fillTaskVariables($_POST, $variables);
+        $camundaTask->setOwner($GLOBALS['current_user']); //use setOwner instead of assign, so assignment hook is not triggered
+        $camundaTask->submitForm($variables);
         $this->redirectToBean();
     }
 
@@ -191,54 +159,42 @@ class CamundaProcessesController extends SugarController
     {
         $this->view = '';
         if (empty($this->sugarBean)) {
-            $GLOBALS['log']->error("CamundaProcessesController action_Assign: sugar bean not loaded");
+            echo translate('ERROR_NO_RECORD');
             return;
         }
-        $camunda = SugarCamunda::getJsonClient();
-
-        $taskId = $_POST['task_id'];
-        $newAssingedUserId = $_POST['assigned_user_id'];
-        $task = $camunda->get("/task/{$taskId}");
-        $roles = SugarCamunda::getTaskCandidateRoles($taskId);
-        $users = empty($roles)
-            ? UserList::getAllGroupUsers($this->sugarBean)
-            : UserList::getGroupUsersWithRoles($this->sugarBean, $roles);
-
-        $canAssign = SugarCamunda::canAssignTask($this->sugarBean, $users);
+        $taskId = SugarCamunda::clean_string($_POST['task_id']);
+        $newAssignedUserId = $_POST['assigned_user_id'];
+        $task = SugarCamunda::getJsonClient()->get("/task/{$taskId}");
+        $process = SugarCamunda::getCamundaProcess(array('id' => $task['processDefinitionId']), $this->sugarBean, $this->camundaFieldName);
+        if (!$process) {
+            echo 'No process';
+            return;
+        }
+        $camundaTask = $process->getCamundaTask($task);
+        $canAssign = $camundaTask->assignAccess();
         if (!$canAssign) {
-            sugar_die('Access denied');
+            echo 'Access denied';
+            return;
         }
-
-        if (!empty($newAssingedUserId) && !isset($users[$newAssingedUserId])) {
-            sugar_die('Cannot assign this user');
-        }
-
-        $newAssignee = '';
-        if (!empty($newAssingedUserId)) {
-            $user = BeanFactory::getBean('Users', $newAssingedUserId);
-            if (!$user) {
-                sugar_die('Cannot assign this user (user not found)');
+        $newAssignedUser = null;
+        if (!empty($newAssignedUserId)) {
+            $newAssignedUser = BeanFactory::getBean('Users', $newAssignedUserId);
+            if (!$newAssignedUser) {
+                echo 'Cannot assign this user (user not found)';
+                return;
             }
-            $newAssignee = $user->user_name;
+            if (!$camundaTask->canBeAssigned($newAssignedUser)) {
+                echo 'Cannot assign this user';
+                return;
+            }
         }
-
-        $camunda->post("/task/{$taskId}/identity-links", [
-            'userId' => $newAssignee,
-            'type' => 'assignee',
-        ]);
-        if (!empty($newAssignee) && $user->id != $GLOBALS['current_user']->id
-            && $newAssignee != $task['assignee'])
-        {
-            SugarCamunda::notifyTaskAssignedUser($this->sugarBean, $user);
-        }
-
+        $camundaTask->assign($newAssignedUser);
         $this->redirectToBean();
     }
 
     protected function redirectToBean()
     {
-        $this->return_module = $this->sugarBean->module_name;
-        $this->return_id = $this->sugarBean->id;
-        parent::post_save();
+        $url = "index.php?module={$this->sugarBean->module_name}&action=DetailView&return_field={$this->camundaFieldName}&record={$this->sugarBean->id}";
+        $this->set_redirect($url);
     }
 }

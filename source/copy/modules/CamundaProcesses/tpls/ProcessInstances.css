@@ -1,0 +1,119 @@
+/*!
+ * @license http://hardsoft321.org/license/ GPLv3
+ * @author Evgeny Pervushin <pea@lab321.ru>
+ */
+
+[ng-if] {
+    display: none;
+}
+.camunda-panel .form-group {
+    clear: both;
+}
+.view tr td table.camunda-process-definitions tr td {
+    padding: 5px 6px 5px 6px;
+}
+.detail table.camunda-process-definitions {
+    background: none;
+}
+label {
+    margin-bottom: 0;
+}
+.camunda-task > .attr > div > label {
+    padding-left: 20px;
+}
+.camunda-variables, .camunda-task {
+    margin-bottom: 15px;
+}
+.canvas .highlight .djs-outline {
+    stroke-width: 2px !important;
+    stroke: #155cb5 !important;
+    fill: rgba(194,213,237,0.4) !important;
+}
+
+.camunda-variables .detail-view-field, .camunda-sugar-task-form .detail-view-field {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+.camunda-variables .proc-var {
+    border-bottom: 1px solid #CBDAE6;
+}
+.camunda-variables .proc-var > div {
+    display: inline-block;
+}
+
+.camunda-variables .proc-var > div > label, .detail-view-field .form-group > label {
+    display: inline-block;
+    padding: 5px;
+    width: 25%;
+    min-width: 150px;
+    box-sizing: border-box;
+    height: 100%;
+    background-color: #F6F6F6;
+    text-align: right;
+}
+form .detail-view-field .form-group > label {
+    height: inherit;
+}
+.camunda-sugar-task-form, .camunda-sugar-assign-form, .camunda-sugar-form.camunda-procdef-form {
+    background-color: #F6F6F6;
+}
+.camunda-panel form .form-group {
+    border: none;
+    padding: 3px 0;
+}
+.camunda-panel form .form-group.submit-group {
+    padding: 5px;
+}
+.camunda-activity.form-group {
+    display: grid;
+    grid-template-columns: 1fr 3fr;
+}
+.camunda-activity.form-group > label {
+    width: 100%;
+}
+.camunda-activity.form-group > div {
+    padding: 5px;
+}
+
+.detail-view-field .form-group {
+    border-bottom: 1px solid #CBDAE6;
+}
+.form-group textarea {
+    width: 435px;
+    height: 56px;
+    vertical-align: top;
+}
+.form-group input[disabled], .form-group textarea[disabled], .form-group select[disabled] {
+    color: #717171;
+    background-color: #f6f6f6;
+}
+
+.camunda-task__history .arr {
+    font-size: 18px;
+}
+
+.camunda-process-instance + .camunda-process-instance {
+    margin-top: 20px;
+}
+
+ul.tab-list {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+ul.tab-list a {
+    color: #444444;
+}
+.detail ul.tab-list a:hover {
+    color: #444444;
+    background: #fafafa;
+    cursor: pointer;
+}
+ul.tab-list li {
+    margin: 0 -3px 0 0;
+}
+.tab-panel {
+    display: none;
+}
+.tab-content .active {
+    display: block;
+}
