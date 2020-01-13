@@ -58,7 +58,7 @@ class SugarCamunda
 
         if ($bpmnList !== null) {
             foreach ($processDefinitions as $k => $processDefinition) {
-                if (!in_array($processDefinition['resource'], $bpmnList)) {
+                if (!in_array($processDefinition['key'], $bpmnList)) {
                     unset($processDefinitions[$k]);
                 }
             }
@@ -74,7 +74,11 @@ class SugarCamunda
                     $processDefinition['form']['html'] = file_get_contents($url);
                 }
                 else {
-                    $processDefinition['form']['html'] = $camundaRaw->get("/process-definition/{$processDefinition['id']}/rendered-form");
+                    try {
+                        $processDefinition['form']['html'] = $camundaRaw->get("/process-definition/{$processDefinition['id']}/rendered-form");
+                    }
+                    catch (Exception $ex) {
+                    }
                 }
             }
         }
