@@ -6,9 +6,9 @@ $manifest = array(
     'author' => 'hardsoft321',
     'description' => 'Integration with Camunda',
     'is_uninstallable' => true,
-    'published_date' => '2018-03-20',
+    'published_date' => '2023-01-12',
     'type' => 'module',
-    'version' => '0.2.0',
+    'version' => '0.2.1',
 );
 $installdefs = array(
     'id' => 'camunda',

@@ -3,6 +3,19 @@
  * @author Evgeny Pervushin <pea@lab321.ru>
  *}
 
+<style>
+.detail-view-field[type="CamundaProcess"] {ldelim}
+    background-color: inherit;
+{rdelim}
+.camunda-panel .detail-view-field {ldelim}
+    display: block;
+{rdelim}
+.camunda-panel .detail-view-field + .detail-view-field {ldelim}
+    margin-top: 15px;
+{rdelim}
+</style>
+
+
 <div class="sugar_field camunda-panel" id="{{sugarvar key='name'}}" data-field="{{sugarvar key='name'}}"
     data-sugar_module="{$module}" data-sugar_record="{$id}">
     <a href="#" class="load-camunda-panel" onclick="loadCamundaPanel('{{sugarvar key='name'}}'); return false">

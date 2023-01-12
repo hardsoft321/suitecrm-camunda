@@ -29,6 +29,7 @@ class CamundaProcess
     public function loadProcessDefinition(&$processDefinition)
     {
         $processDefinition['form'] = SugarCamunda::getJsonClient()->get("process-definition/{$processDefinition['id']}/startForm");
+
         if (!empty($processDefinition['form']['key'])
             && strpos($processDefinition['form']['key'], "embedded:app:") === 0) {
             $url = SugarCamunda::getUrl()

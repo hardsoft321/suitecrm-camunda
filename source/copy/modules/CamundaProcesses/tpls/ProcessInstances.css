@@ -9,7 +9,7 @@
 .camunda-panel .form-group {
     clear: both;
 }
-.view tr td table.camunda-process-definitions tr td {
+table.camunda-process-definitions tr td {
     padding: 5px 6px 5px 6px;
 }
 .detail table.camunda-process-definitions {
@@ -43,13 +43,15 @@ label {
 
 .camunda-variables .proc-var > div > label, .detail-view-field .form-group > label {
     display: inline-block;
-    padding: 5px;
+/*    padding: 5px; */
     width: 25%;
     min-width: 150px;
     box-sizing: border-box;
     height: 100%;
+/*
     background-color: #F6F6F6;
     text-align: right;
+*/
 }
 form .detail-view-field .form-group > label {
     height: inherit;
@@ -59,7 +61,7 @@ form .detail-view-field .form-group > label {
 }
 .camunda-panel form .form-group {
     border: none;
-    padding: 3px 0;
+/*    padding: 3px 0; */
 }
 .camunda-panel form .form-group.submit-group {
     padding: 5px;

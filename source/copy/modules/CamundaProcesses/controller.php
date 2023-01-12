@@ -51,8 +51,11 @@ class CamundaProcessesController extends SugarController
             echo translate('LBL_LOADING') . '<script>location.reload();</script>'; //TODO: it can be faster with SUGAR.ajaxUI
             return;
         }
+        // var_dump($processInstances[0].tasks);
+        // var_dump($processInstances[0]);
         if (empty($processInstances) && $show_process_instances) {
             $processDefinitions = SugarCamunda::loadProcessDefinitions($this->sugarBean, $this->camundaFieldName);
+
             $ss->assign('processDefinitions', $processDefinitions);
             echo $ss->fetch('modules/CamundaProcesses/tpls/ProcessDefinitions.tpl');
         }
