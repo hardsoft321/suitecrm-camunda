@@ -1,0 +1,13 @@
+{
+  "name": "hs321/suitecrm-camunda",
+  "description": "SuiteCRM and Camunda integration hphp dependences",
+  "homepage": "https://hardsoft321.ru",
+  "type": "project",
+  "license": "GPL-3.0",
+  "authors": [],
+  "minimum-stability": "dev",
+  "require": {
+    "educoder/pest": "1.0"
+  }
+}
+
