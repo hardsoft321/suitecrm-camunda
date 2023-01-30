@@ -1,4 +1,9 @@
 <?php
+/**
+ * @license http://hardsoft321.org/license/ GPLv3
+ * @author Leon Nikitin <nlv@lab321.ru>
+ */
+
 
 $dictionary['AOS_Quotes']['fields']['camunda_process'] = array (
     'name' => 'camunda_process',
