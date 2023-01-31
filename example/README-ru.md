@@ -3,14 +3,14 @@
 Папка `example` содержит пример настройки бизнес-процесса "Обработка заказа" для модуля `AOS_Quotes`.
 
 * `bpmn` - пример схемы бизнес-процесса для `Camunda`: bpmn схема и необходимые java классы (русский и английский варианты);
-* `camunda-example` - пакет по добавлению настроек в модуле `AOS_Quotes` (без добавления панели согласования на форму просмотра - `detailviewdefs`);
+* `camunda-example-ru` - пакет по добавлению настроек в модуле `AOS_Quotes` (без добавления панели согласования на форму просмотра - `detailviewdefs`), русская версия;
 * `camunda-example-ui` - пакет по добавлению панели согласования в `detailviewdefs`.
 
 ### Установка примера настройки бизнес-процесса в `SuiteCRM`
 
 1. Установите пакет интеграции `SuiteCRM` с `Camunda`;
 2. пропишите в файле конфигурации `SuiteCRM` доступ к сервису `Camunda`;
-3. установите пакет `camunda-example`;
+3. установите пакет `camunda-example-ru`;
 4. добавьте панель согласования в `detailviewdefs` модуля `AOS_Quotes` одним из следующий способов:
    * если в Вашей инсталяции `SuiteCRM` не предполагается доработка формы просмотра модуля `AOS_Quotes`, то установите пакет `camunda-example-ui`. Пакет создаст или ==перезапишет==  файл `custom/modules/AOS_Quotes/metadata/detailviewdefs.php`;
    * если в Вашей инсталяции уже была доработка формы просмотра модуля `AOS_Quotes`, то вручную добавьте в файл `custom/modules/AOS_Quotes/metadata/detailviewdefs.php` (или `modules/AOS_Quotes/metadata/detailviewdefs.php`) панель согласования;

@@ -1,12 +1,12 @@
 <?php
 $manifest = array(
-    'name' => 'camunda-example',
+    'name' => 'camunda-example-ru',
     'acceptable_sugar_versions' => array(),
     'acceptable_sugar_flavors' => array('CE'),
     'author' => 'hardsoft321',
-    'description' => 'Example process of AOS_Quotes Camunda Integration',
+    'description' => 'Example process of AOS_Quotes Camunda Integration (Russian language)',
     'is_uninstallable' => true,
-    'published_date' => '2023-01-24',
+    'published_date' => '2023-01-31',
     'type' => 'module',
     'version' => '0.0.1',
     'dependencies' => array(
@@ -18,7 +18,7 @@ $manifest = array(
 
 );
 $installdefs = array(
-    'id' => 'camunda-example',
+    'id' => 'camunda-example-ru',
     'copy' => array(
         array(
             'from' => '<basepath>/source/copy',
