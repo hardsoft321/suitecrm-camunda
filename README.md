@@ -111,3 +111,9 @@
 
      ```
 Add changes to `SuiteCRM` manually (after that, perform the "restore" procedure), or by issuing a package and installing it using the module loader.
+
+В папке example находится пример настройки интеграции процесса для модуля `AOS_Quotes`. 
+Смортрие инструкция по установке примера в файле `example/README-ru.md`.
+
+The folder `example` contains an example of process integration settings for the `AOS_Quotes` module. 
+See the instructions for installing the example in the file `example/README.md`.
